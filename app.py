@@ -127,9 +127,13 @@ def delete_note(board_id, note_id):
 def export_board(board_id):
     data = _load_board(board_id)
     today = datetime.utcnow().strftime("%Y-%m-%d")
+    counts = {col: len(data["columns"][col]) for col in COLUMNS}
+    total = sum(counts.values())
+    summary = " · ".join(f"{COLUMN_LABELS[col]}: {counts[col]}" for col in COLUMNS)
     lines = [
         f"# {data['title']}",
-        f"> Exported on {today} · Board ID: `{board_id}`",
+        f"> Exported on {today} · Board ID: `{board_id}` · **{total} notes total**",
+        f"> {summary}",
         "",
     ]
     for col in COLUMNS:
