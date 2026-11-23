@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RetroBoard — Run better retrospectives</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="landing-page">
+
+  <div class="landing-wrapper">
+    <div class="landing-hero">
+      <div class="logo-mark">◈</div>
+      <h1 class="landing-title">RetroBoard</h1>
+      <p class="landing-sub">Lightweight retrospectives for real teams.<br>No login. No account. Just a link.</p>
+
+      <form class="create-form" id="createForm">
+        <input
+          type="text"
+          id="boardTitle"
+          class="title-input"
+          placeholder="Sprint 42 Retrospective"
+          maxlength="80"
+          autocomplete="off"
+        />
+        <button type="submit" class="btn-create" id="createBtn">
+          <span class="btn-text">Create Board</span>
+          <span class="btn-icon">→</span>
+        </button>
+      </form>
+
+      <p class="landing-hint">A shareable link is generated instantly — paste it in your team chat.</p>
+    </div>
+
+    <div class="landing-features">
+      <div class="feature-pill">✦ Three columns</div>
+      <div class="feature-pill">✦ Anonymous voting</div>
+      <div class="feature-pill">✦ Export to Markdown</div>
+      <div class="feature-pill">✦ Self-hosted</div>
+      <div class="feature-pill">✦ No database</div>
+    </div>
+
+    <footer class="landing-footer">
+      Open source · MIT License ·
+      <a href="https://github.com/2025sl93072/retroboard" target="_blank">GitHub</a>
+    </footer>
+  </div>
+
+  <script>
+    const form = document.getElementById('createForm');
+    const btn  = document.getElementById('createBtn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('boardTitle').value.trim()
+        || 'Sprint Retrospective';
+
+      btn.disabled = true;
+      btn.querySelector('.btn-text').textContent = 'Creating…';
+
+      try {
+        const res  = await fetch('/api/boards', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title }),
+        });
+        const data = await res.json();
+        window.location.href = `/board/${data.id}`;
+      } catch {
+        btn.disabled = false;
+        btn.querySelector('.btn-text').textContent = 'Create Board';
+        alert('Something went wrong. Please try again.');
+      }
+    });
+  </script>
+</body>
+</html>

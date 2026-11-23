@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RetroBoard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="board-page">
+
+  <header class="board-header">
+    <a href="/" class="logo-small">◈ RetroBoard</a>
+    <h1 class="board-title" id="boardTitle">Loading…</h1>
+    <div class="header-actions">
+      <button class="btn-copy" id="copyBtn" title="Copy board link">
+        <span>⎘ Copy Link</span>
+      </button>
+      <a class="btn-export" id="exportBtn" title="Export to Markdown">
+        ↓ Export
+      </a>
+    </div>
+  </header>
+
+  <main class="columns-wrapper" id="columnsWrapper">
+    <div class="column" id="col-went_well">
+      <div class="column-header col-green">
+        <span class="col-icon">✦</span>
+        <h2>What Went Well</h2>
+        <span class="note-count" id="count-went_well">0</span>
+      </div>
+      <div class="notes-list" id="notes-went_well"></div>
+      <div class="add-note-area">
+        <textarea class="note-input" id="input-went_well" placeholder="Add a note…" maxlength="500" rows="2"></textarea>
+        <button class="btn-add" data-column="went_well">Add ✦</button>
+      </div>
+    </div>
+
+    <div class="column" id="col-didnt_go_well">
+      <div class="column-header col-pink">
+        <span class="col-icon">✗</span>
+        <h2>What Didn't Go Well</h2>
+        <span class="note-count" id="count-didnt_go_well">0</span>
+      </div>
+      <div class="notes-list" id="notes-didnt_go_well"></div>
+      <div class="add-note-area">
+        <textarea class="note-input" id="input-didnt_go_well" placeholder="Add a note…" maxlength="500" rows="2"></textarea>
+        <button class="btn-add" data-column="didnt_go_well">Add ✦</button>
+      </div>
+    </div>
+
+    <div class="column" id="col-action_items">
+      <div class="column-header col-purple">
+        <span class="col-icon">→</span>
+        <h2>Action Items</h2>
+        <span class="note-count" id="count-action_items">0</span>
+      </div>
+      <div class="notes-list" id="notes-action_items"></div>
+      <div class="add-note-area">
+        <textarea class="note-input" id="input-action_items" placeholder="Add an action…" maxlength="500" rows="2"></textarea>
+        <button class="btn-add" data-column="action_items">Add ✦</button>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const BOARD_ID = "{{ board_id }}";
+  </script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
