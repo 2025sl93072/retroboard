@@ -112,6 +112,9 @@ async function voteNote(btn) {
   const data   = await res.json();
 
   btn.classList.add("voted");
+  btn.classList.remove("pop");
+  void btn.offsetWidth; // reflow to restart animation
+  btn.classList.add("pop");
   btn.querySelector(".vote-count").textContent = data.votes;
   showToast("Vote counted ▲");
   await loadBoard();

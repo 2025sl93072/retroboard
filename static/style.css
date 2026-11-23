@@ -45,6 +45,7 @@ body {
   max-width: 540px;
   width: 100%;
   text-align: center;
+  animation: fadeUp .5s cubic-bezier(.34,1.2,.64,1) both;
 }
 
 .logo-mark {
@@ -260,6 +261,37 @@ body {
   .columns-wrapper { grid-template-columns: 1fr; }
 }
 
+@media (max-width: 600px) {
+  .board-header {
+    gap: .6rem;
+    padding: .75rem 1rem;
+  }
+
+  .board-title {
+    width: 100%;
+    flex: none;
+    order: 3;
+    font-size: 1rem;
+  }
+
+  .header-actions { margin-left: auto; }
+
+  .btn-copy, .btn-export {
+    padding: .5rem .85rem;
+    font-size: .8rem;
+    min-height: 36px;
+  }
+
+  .columns-wrapper { padding: 1rem .75rem; gap: 1rem; }
+
+  .btn-add, .btn-vote, .btn-delete {
+    min-height: 36px;
+  }
+
+  .landing-title { font-size: 2.2rem; }
+  .logo-mark     { font-size: 2.4rem; }
+}
+
 .column {
   background: var(--surface);
   border-radius: var(--radius);
@@ -323,9 +355,15 @@ body {
   display: flex;
   flex-direction: column;
   gap: .5rem;
-  animation: slideIn .2s ease;
+  animation: slideIn .25s cubic-bezier(.34,1.56,.64,1) both;
   transition: box-shadow .2s, transform .2s;
 }
+
+.note-card:nth-child(1) { animation-delay: .03s; }
+.note-card:nth-child(2) { animation-delay: .07s; }
+.note-card:nth-child(3) { animation-delay: .11s; }
+.note-card:nth-child(4) { animation-delay: .15s; }
+.note-card:nth-child(5) { animation-delay: .19s; }
 
 .note-card:hover {
   box-shadow: var(--shadow-hover);
@@ -333,8 +371,19 @@ body {
 }
 
 @keyframes slideIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0);   }
+  from { opacity: 0; transform: translateY(12px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);   }
+}
+
+@keyframes popIn {
+  0%   { transform: scale(1);    }
+  40%  { transform: scale(1.18); }
+  100% { transform: scale(1);    }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0);    }
 }
 
 .note-text {
@@ -371,6 +420,10 @@ body {
   border-color: var(--purple-mid);
   color: #6d28d9;
   transform: scale(1.05);
+}
+
+.btn-vote.pop {
+  animation: popIn .3s cubic-bezier(.34,1.56,.64,1);
 }
 
 .btn-vote.voted {
