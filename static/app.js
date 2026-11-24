@@ -1,5 +1,18 @@
 const COLUMNS = ["went_well", "didnt_go_well", "action_items"];
 
+// ── User token (persisted per browser) ───────────────────────────────────────
+
+function getUserToken() {
+  let token = localStorage.getItem("retro_user_token");
+  if (!token) {
+    token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    localStorage.setItem("retro_user_token", token);
+  }
+  return token;
+}
+
+const USER_TOKEN = getUserToken();
+
 // ── Socket.IO ─────────────────────────────────────────────────────────────────
 
 const socket = io();
@@ -13,7 +26,13 @@ socket.on("presence", ({ count }) => {
   if (el) el.textContent = count === 1 ? "● 1 person active" : `● ${count} people active`;
 });
 
+let _suppressNextBoardUpdate = false;
+
 socket.on("board_updated", () => {
+  if (_suppressNextBoardUpdate) {
+    _suppressNextBoardUpdate = false;
+    return;
+  }
   loadBoard();
 });
 
@@ -40,9 +59,17 @@ async function init() {
 
 // ── Load Board ───────────────────────────────────────────────────────────────
 
+let _votedNotes = new Set();
+
 async function loadBoard() {
-  const res  = await fetch(`/api/boards/${BOARD_ID}`);
-  const data = await res.json();
+  const [boardRes, votesRes] = await Promise.all([
+    fetch(`/api/boards/${BOARD_ID}`),
+    fetch(`/api/boards/${BOARD_ID}/my_votes?user_token=${USER_TOKEN}`),
+  ]);
+  const data      = await boardRes.json();
+  const votesData = await votesRes.json();
+
+  _votedNotes = new Set(votesData.voted_notes || []);
 
   document.getElementById("boardTitle").textContent = data.title;
   document.title = `${data.title} · RetroBoard`;
@@ -72,17 +99,21 @@ function buildNoteCard(note, column) {
   card.className = "note-card";
   card.dataset.id = note.id;
 
+  const voted = _votedNotes.has(note.id);
+
   card.innerHTML = `
     <p class="note-text">${escapeHtml(note.text)}</p>
     <div class="note-actions">
-      <button class="btn-vote" data-id="${note.id}" data-column="${column}" title="Upvote">
+      <button class="btn-vote ${voted ? "voted" : ""}"
+        data-id="${note.id}" data-column="${column}"
+        title="${voted ? "Remove your vote" : "Upvote"}">
         ▲ <span class="vote-count">${note.votes}</span>
       </button>
       <button class="btn-delete" data-id="${note.id}" data-column="${column}" title="Delete note">✕</button>
     </div>
   `;
 
-  card.querySelector(".btn-vote").addEventListener("click",   e => voteNote(e.currentTarget));
+  card.querySelector(".btn-vote").addEventListener("click", e => voteNote(e.currentTarget));
   card.querySelector(".btn-delete").addEventListener("click", e => deleteNote(e.currentTarget));
   return card;
 }
@@ -97,6 +128,7 @@ async function addNote(column) {
   if (!text) { input.focus(); return; }
 
   btn.disabled = true;
+  _suppressNextBoardUpdate = true;
   try {
     const res = await fetch(`/api/boards/${BOARD_ID}/notes`, {
       method: "POST",
@@ -104,12 +136,22 @@ async function addNote(column) {
       body: JSON.stringify({ column, text }),
     });
     if (!res.ok) {
+      _suppressNextBoardUpdate = false;
       const err = await res.json();
       showToast(err.error || "Failed to add note");
       return;
     }
+    const note = await res.json();
     input.value = "";
-    await loadBoard();
+
+    const list  = document.getElementById(`notes-${column}`);
+    const count = document.getElementById(`count-${column}`);
+    const empty = list.querySelector(".empty-state");
+    if (empty) empty.remove();
+    const card = buildNoteCard(note, column);
+    card.classList.add("is-new");
+    list.appendChild(card);
+    count.textContent = list.querySelectorAll(".note-card").length;
   } finally {
     btn.disabled = false;
     input.focus();
@@ -119,22 +161,35 @@ async function addNote(column) {
 // ── Vote ─────────────────────────────────────────────────────────────────────
 
 async function voteNote(btn) {
-  if (btn.classList.contains("voted")) {
-    showToast("You already voted on this note");
+  const noteId = btn.dataset.id;
+  _suppressNextBoardUpdate = true;
+  const res = await fetch(`/api/boards/${BOARD_ID}/notes/${noteId}/vote`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_token: USER_TOKEN }),
+  });
+  if (!res.ok) {
+    _suppressNextBoardUpdate = false;
+    const err = await res.json();
+    showToast(err.error || "Vote failed");
     return;
   }
-  const noteId = btn.dataset.id;
-  const res    = await fetch(`/api/boards/${BOARD_ID}/notes/${noteId}/vote`, { method: "POST" });
-  if (!res.ok) return;
-  const data   = await res.json();
+  const data = await res.json();
 
-  btn.classList.add("voted");
+  if (data.action === "added") {
+    _votedNotes.add(noteId);
+    btn.classList.add("voted");
+    btn.title = "Remove your vote";
+  } else {
+    _votedNotes.delete(noteId);
+    btn.classList.remove("voted");
+    btn.title = "Upvote";
+  }
   btn.classList.remove("pop");
-  void btn.offsetWidth; // reflow to restart animation
+  void btn.offsetWidth;
   btn.classList.add("pop");
   btn.querySelector(".vote-count").textContent = data.votes;
-  showToast("Vote counted ▲");
-  await loadBoard();
+  showToast(data.action === "added" ? "Vote added ▲" : "Vote removed");
 }
 
 // ── Delete ────────────────────────────────────────────────────────────────────
@@ -142,11 +197,23 @@ async function voteNote(btn) {
 async function deleteNote(btn) {
   if (!confirm("Delete this note?")) return;
   const noteId = btn.dataset.id;
-  const res    = await fetch(`/api/boards/${BOARD_ID}/notes/${noteId}`, { method: "DELETE" });
-  if (res.ok) {
-    await loadBoard();
-    showToast("Note deleted");
+  _suppressNextBoardUpdate = true;
+  const res = await fetch(`/api/boards/${BOARD_ID}/notes/${noteId}`, { method: "DELETE" });
+  if (!res.ok) {
+    _suppressNextBoardUpdate = false;
+    return;
   }
+  const card   = btn.closest(".note-card");
+  const list   = card.closest(".notes-list");
+  const column = list.id.replace("notes-", "");
+  const count  = document.getElementById(`count-${column}`);
+  card.remove();
+  const remaining = list.querySelectorAll(".note-card").length;
+  count.textContent = remaining;
+  if (remaining === 0) {
+    list.innerHTML = `<p class="empty-state">No notes yet — add one below</p>`;
+  }
+  showToast("Note deleted");
 }
 
 // ── Copy Link ─────────────────────────────────────────────────────────────────

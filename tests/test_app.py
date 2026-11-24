@@ -94,28 +94,53 @@ def test_note_appears_in_board(client):
 
 def test_vote_note(client):
     bid = _make_board(client)
-    note_res = client.post(f"/api/boards/{bid}/notes",
-                           json={"column": "went_well", "text": "Good demo"})
-    nid = note_res.get_json()["id"]
-    vote_res = client.post(f"/api/boards/{bid}/notes/{nid}/vote")
-    assert vote_res.status_code == 200
-    assert vote_res.get_json()["votes"] == 1
+    nid = client.post(f"/api/boards/{bid}/notes",
+                      json={"column": "went_well", "text": "Good demo"}).get_json()["id"]
+    res = client.post(f"/api/boards/{bid}/notes/{nid}/vote", json={"user_token": "user1"})
+    assert res.status_code == 200
+    assert res.get_json()["votes"] == 1
+    assert res.get_json()["action"] == "added"
 
 
 def test_vote_increments(client):
     bid = _make_board(client)
-    nid = client.post(f"/api/boards/{bid}/notes",
-                      json={"column": "went_well", "text": "x"}).get_json()["id"]
-    client.post(f"/api/boards/{bid}/notes/{nid}/vote")
-    client.post(f"/api/boards/{bid}/notes/{nid}/vote")
-    res = client.post(f"/api/boards/{bid}/notes/{nid}/vote")
-    assert res.get_json()["votes"] == 3
+    nids = [
+        client.post(f"/api/boards/{bid}/notes",
+                    json={"column": "went_well", "text": f"note {i}"}).get_json()["id"]
+        for i in range(3)
+    ]
+    for nid in nids:
+        client.post(f"/api/boards/{bid}/notes/{nid}/vote", json={"user_token": "user1"})
+    board = client.get(f"/api/boards/{bid}").get_json()
+    total_votes = sum(n["votes"] for n in board["columns"]["went_well"])
+    assert total_votes == 3
 
 
 def test_vote_note_not_found(client):
     bid = _make_board(client)
-    res = client.post(f"/api/boards/{bid}/notes/fakeid/vote")
+    res = client.post(f"/api/boards/{bid}/notes/fakeid/vote", json={"user_token": "user1"})
     assert res.status_code == 404
+
+
+def test_toggle_vote_removes(client):
+    bid = _make_board(client)
+    nid = client.post(f"/api/boards/{bid}/notes",
+                      json={"column": "went_well", "text": "x"}).get_json()["id"]
+    client.post(f"/api/boards/{bid}/notes/{nid}/vote", json={"user_token": "user1"})
+    res = client.post(f"/api/boards/{bid}/notes/{nid}/vote", json={"user_token": "user1"})
+    assert res.status_code == 200
+    assert res.get_json()["votes"] == 0
+    assert res.get_json()["action"] == "removed"
+
+
+def test_different_users_can_each_vote(client):
+    bid = _make_board(client)
+    nid = client.post(f"/api/boards/{bid}/notes",
+                      json={"column": "went_well", "text": "x"}).get_json()["id"]
+    client.post(f"/api/boards/{bid}/notes/{nid}/vote", json={"user_token": "user1"})
+    client.post(f"/api/boards/{bid}/notes/{nid}/vote", json={"user_token": "user2"})
+    board = client.get(f"/api/boards/{bid}").get_json()
+    assert board["columns"]["went_well"][0]["votes"] == 2
 
 
 # ── Delete ────────────────────────────────────────────────────────────────────

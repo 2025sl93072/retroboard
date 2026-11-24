@@ -68,6 +68,7 @@ def create_board():
         "title": body.get("title", "Sprint Retrospective"),
         "created_at": datetime.utcnow().isoformat() + "Z",
         "columns": {col: [] for col in COLUMNS},
+        "votes_by_user": {},
     }
     _save_board(board_id, data)
     return jsonify({"id": board_id}), 201
@@ -105,16 +106,40 @@ def add_note(board_id):
     return jsonify(note), 201
 
 
+@app.route("/api/boards/<board_id>/my_votes", methods=["GET"])
+def my_votes(board_id):
+    data = _load_board(board_id)
+    token = request.args.get("user_token", "")
+    voted_notes = data.get("votes_by_user", {}).get(token, [])
+    return jsonify({"voted_notes": voted_notes})
+
+
 @app.route("/api/boards/<board_id>/notes/<note_id>/vote", methods=["POST"])
 def vote_note(board_id, note_id):
     data = _load_board(board_id)
+    body = request.get_json(silent=True) or {}
+    token = (body.get("user_token") or "").strip()
+    if not token:
+        return jsonify({"error": "user_token is required"}), 400
+
+    votes_by_user = data.setdefault("votes_by_user", {})
+    user_votes = votes_by_user.setdefault(token, [])
+
     for column in COLUMNS:
         for note in data["columns"][column]:
             if note["id"] == note_id:
-                note["votes"] += 1
-                _save_board(board_id, data)
-                socketio.emit("board_updated", {}, to=board_id)
-                return jsonify({"votes": note["votes"]})
+                if note_id in user_votes:
+                    user_votes.remove(note_id)
+                    note["votes"] = max(0, note["votes"] - 1)
+                    _save_board(board_id, data)
+                    socketio.emit("board_updated", {}, to=board_id)
+                    return jsonify({"votes": note["votes"], "action": "removed"})
+                else:
+                    user_votes.append(note_id)
+                    note["votes"] += 1
+                    _save_board(board_id, data)
+                    socketio.emit("board_updated", {}, to=board_id)
+                    return jsonify({"votes": note["votes"], "action": "added"})
     return jsonify({"error": "Note not found"}), 404
 
 
