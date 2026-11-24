@@ -5,8 +5,14 @@ from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, abort
+from flask_socketio import SocketIO, join_room, emit as socket_emit
 
 app = Flask(__name__)
+app.config["SECRET_KEY"] = secrets.token_hex(16)
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+# board_id -> set of connected session IDs
+_board_rooms: dict[str, set] = {}
 BOARDS_DIR = Path("boards")
 BOARDS_DIR.mkdir(exist_ok=True)
 
@@ -62,6 +68,7 @@ def create_board():
         "title": body.get("title", "Sprint Retrospective"),
         "created_at": datetime.utcnow().isoformat() + "Z",
         "columns": {col: [] for col in COLUMNS},
+        "votes_by_user": {},
     }
     _save_board(board_id, data)
     return jsonify({"id": board_id}), 201
@@ -95,18 +102,44 @@ def add_note(board_id):
     }
     data["columns"][column].append(note)
     _save_board(board_id, data)
+    socketio.emit("board_updated", {}, to=board_id)
     return jsonify(note), 201
+
+
+@app.route("/api/boards/<board_id>/my_votes", methods=["GET"])
+def my_votes(board_id):
+    data = _load_board(board_id)
+    token = request.args.get("user_token", "")
+    voted_notes = data.get("votes_by_user", {}).get(token, [])
+    return jsonify({"voted_notes": voted_notes})
 
 
 @app.route("/api/boards/<board_id>/notes/<note_id>/vote", methods=["POST"])
 def vote_note(board_id, note_id):
     data = _load_board(board_id)
+    body = request.get_json(silent=True) or {}
+    token = (body.get("user_token") or "").strip()
+    if not token:
+        return jsonify({"error": "user_token is required"}), 400
+
+    votes_by_user = data.setdefault("votes_by_user", {})
+    user_votes = votes_by_user.setdefault(token, [])
+
     for column in COLUMNS:
         for note in data["columns"][column]:
             if note["id"] == note_id:
-                note["votes"] += 1
-                _save_board(board_id, data)
-                return jsonify({"votes": note["votes"]})
+                if note_id in user_votes:
+                    user_votes.remove(note_id)
+                    note["votes"] = max(0, note["votes"] - 1)
+                    _save_board(board_id, data)
+                    socketio.emit("board_updated", {}, to=board_id)
+                    return jsonify({"votes": note["votes"], "action": "removed"})
+                else:
+                    user_votes.append(note_id)
+                    note["votes"] += 1
+                    _save_board(board_id, data)
+                    socketio.emit("board_updated", {}, to=board_id)
+                    return jsonify({"votes": note["votes"], "action": "added"})
     return jsonify({"error": "Note not found"}), 404
 
 
@@ -119,6 +152,7 @@ def delete_note(board_id, note_id):
             if note["id"] == note_id:
                 notes.pop(i)
                 _save_board(board_id, data)
+                socketio.emit("board_updated", {}, to=board_id)
                 return jsonify({"ok": True})
     return jsonify({"error": "Note not found"}), 404
 
@@ -153,9 +187,33 @@ def export_board(board_id):
     }
 
 
+# ── Socket.IO events ──────────────────────────────────────────────────────────
+
+@socketio.on("join_board")
+def on_join(data):
+    board_id = data.get("board_id")
+    if not board_id:
+        return
+    join_room(board_id)
+    _board_rooms.setdefault(board_id, set()).add(request.sid)
+    count = len(_board_rooms[board_id])
+    socket_emit("presence", {"count": count}, to=board_id)
+
+
+@socketio.on("disconnect")
+def on_disconnect():
+    sid = request.sid
+    for board_id, sids in _board_rooms.items():
+        if sid in sids:
+            sids.discard(sid)
+            count = len(sids)
+            socket_emit("presence", {"count": count}, to=board_id)
+            break
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=5000)
     args = parser.parse_args()
-    app.run(debug=True, port=args.port)
+    socketio.run(app, debug=True, port=args.port)
