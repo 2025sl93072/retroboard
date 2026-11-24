@@ -1,5 +1,22 @@
 const COLUMNS = ["went_well", "didnt_go_well", "action_items"];
 
+// ── Socket.IO ─────────────────────────────────────────────────────────────────
+
+const socket = io();
+
+socket.on("connect", () => {
+  socket.emit("join_board", { board_id: BOARD_ID });
+});
+
+socket.on("presence", ({ count }) => {
+  const el = document.getElementById("presence");
+  if (el) el.textContent = count === 1 ? "● 1 person active" : `● ${count} people active`;
+});
+
+socket.on("board_updated", () => {
+  loadBoard();
+});
+
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 
 async function init() {

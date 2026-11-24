@@ -12,6 +12,7 @@
     <a href="/" class="logo-small">◈ RetroBoard</a>
     <h1 class="board-title" id="boardTitle">Loading…</h1>
     <div class="header-actions">
+      <span class="presence-badge" id="presence"></span>
       <button class="btn-copy" id="copyBtn" title="Copy board link">
         <span>⎘ Copy Link</span>
       </button>
@@ -64,6 +65,7 @@
 
   <div class="toast" id="toast"></div>
 
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>
     const BOARD_ID = "{{ board_id }}";
   </script>

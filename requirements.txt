@@ -1,2 +1,4 @@
 Flask==3.0.3
+flask-socketio>=5.3
+simple-websocket>=0.9
 pytest>=8.0
